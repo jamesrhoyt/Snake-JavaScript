@@ -1,0 +1,695 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta charset="utf-8" />
+        <title>Snake (JavaScript)</title>
+        <link href="https://fonts.googleapis.com/css?family=Anton" rel="stylesheet">
+    </head>
+    <body>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <style>
+            #gameCanvas {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+        </style>
+    </body>
+    <script>
+        //Set the Background color.
+        const BACKGROUND_COLOR = 'black';
+        //Set the Game's speed value.
+        const GAME_SPEED = 83;
+        //Create the Array of selectable drawing colors.
+        var colors = ['white', 'red', 'orange', 'yellow', 'lawngreen', 'green', 'deepskyblue', 'blue', 'rebeccapurple', 'gray'];
+        //Select the first color.
+        var current_color = 0;
+        //Get the Canvas.
+        const gameCanvas = document.getElementById("gameCanvas");
+        //Set the Context.
+        const ctx = gameCanvas.getContext("2d");
+        //Set up the Snake's variables.
+        const SNAKE_BLOCK = gameCanvas.height / 30;
+        let snake = [
+            { x: gameCanvas.width / 2, y: gameCanvas.height / 2 }
+        ]
+        //Use these to track Snake direction.
+        let x1_change = 0;
+        let y1_change = 0;
+        let change_vals = [0, 0]
+        //Initialize the Food.
+        var foodx = 0;
+        var foody = 0;
+        createFood();
+        //Keep track of score and measure Snake length.
+        var score = 0;
+        //Initialize the Font and Text values.
+        var font_size = gameCanvas.height / 12.5;
+        var finalscore_text = "SCORE: ";
+        var reset_text = "PRESS 'R' TO RESET";
+        var colors_text = "[1-0] CHANGE COLORS";
+        var autoplay_text = "[P] AUTOPLAY";
+        var bored_text = "[P] I'M BORED, PLAY FOR ME";
+        var stop_text = "[P] STOP PLAYING FOR ME";
+        var loopandhide_text = "[L] LOOP  [H] HIDE/SHOW";
+        var looping_text = "[LOOPING]";
+        //Initialize the flag to check if the Game is over.
+        var game_over = false;
+        //Initialize the flag to check if the Game is in Autoplay Mode.
+        var autoplay = false;
+        //Initialize the flag to automatically restart Autoplay Mode on Game Over.
+        var looping = false;
+        //Initialize the flag to show/hide the "loopandhide_text" prompt.
+        var displayLoopText = true;
+        //Initialize the value to end a "timeOut" loop prematurely when the Game ends.
+        var timeoutID;
+        //Check for "keydown" events.
+        document.addEventListener("keydown", changeDirection);
+        document.addEventListener("keydown", changeColors);
+        document.addEventListener("keydown", changeGameMode);
+
+        //Start running the default mode for the Game.
+        gameLoop();
+
+        //Delay a function loop for a certain number of milliseconds.
+        function sleep(ms) {
+            return new Promise(res => setTimeout(res, ms));
+        }
+
+        //Run the Game.
+        async function gameLoop() {
+            //Run the gameplay loop while the Game isn't over, and Autoplay isn't enabled.
+            while (!game_over && !autoplay) {
+                //Refresh the Screen.
+                clearCanvas();
+                //Update/Draw the Screen Elements.
+                drawFood();
+                moveSnake();
+                drawSnake();
+                drawScore();
+                //Only draw the "Autoplay" prompt if the Game hasn't started yet.
+                if (x1_change == 0 && y1_change == 0) {
+                    drawAutoplayPrompt();
+                }
+                //Wait for ~1/12th of a second.
+                await sleep(GAME_SPEED);
+            }
+
+            //If the Game is over, transition to that screen.
+            if (game_over) {
+                gameOver();
+            }
+        }
+
+        //Handle the Game Over Screen.
+        async function gameOver() {
+            //Manage this screen while the Game is over.
+            while (game_over) {
+                //Refresh the Screen.
+                clearCanvas();
+                //Draw the Screen Elements.
+                drawFood();
+                drawSnake();
+                drawScore();
+                drawGameOverScreen();
+                //Wait for ~1/12th of a second.
+                await sleep(GAME_SPEED);
+            }
+
+            //If the Game has been restarted, begin either Manual or Autoplay Mode.
+            if (!game_over) {
+                if (autoplay) {
+                    gameLoopAuto();
+                }
+                else {
+                    gameLoop();
+                }
+            }
+        }
+
+        //Draw the Game Over Screen.
+        function drawGameOverScreen() {
+            ctx.font = font_size.toString() + "px Anton";
+            ctx.fillStyle = colors[current_color];
+            ctx.fillText(colors_text, 8, font_size);
+            ctx.fillText(finalscore_text + score.toString(), (gameCanvas.width / 2) - (ctx.measureText(finalscore_text + score.toString()).width / 2), gameCanvas.height / 4);
+            ctx.fillText(reset_text, (gameCanvas.width / 2) - (ctx.measureText(reset_text).width / 2), (gameCanvas.height / 4) + font_size + 16);
+            //If the Game isn't in Autoplay Mode, draw the prompt to switch to Autoplay Mode.
+            if (autoplay == false) {
+                ctx.fillText(bored_text, 8, gameCanvas.height - (font_size / 2) + 16);
+            }
+            //Otherwise, draw the prompt to switch back to Manual Mode.
+            else {
+                ctx.fillText(stop_text, 8, gameCanvas.height - (font_size / 2) + 16);
+            }
+        }
+
+        //Run the Game in Autoplay Mode.
+        async function gameLoopAuto() {
+            //Run the gameplay loop while the Game isn't over.
+            while (!game_over) {
+                //Refresh the Screen.
+                clearCanvas();
+                //Choose the Direction for the Snake to travel.
+                change_vals = chooseDirection();
+                x1_change = change_vals[0];
+                y1_change = change_vals[1];
+                //Update/Draw the Screen Elements.
+                moveSnake();
+                drawFood();
+                drawSnake();
+                drawScore();
+                if (displayLoopText == true) {
+                    drawAutoplayText();
+                }
+                //Wait for ~1/12th of a second.
+                await sleep(GAME_SPEED);
+            }
+            //If the Game is over, either transition to the Game Over screen or restart.
+            if (game_over) {
+                //If Looping is enabled, reset the "game_over" flag and restart Autoplay.
+                if (looping) {
+                    game_over = false;
+                    resetGame();
+                    gameLoopAuto();
+                }
+                //Otherwise, display the Game Over screen.
+                else {
+                    gameOver();
+                }
+            }
+        }
+
+        //Draw the Background
+        function clearCanvas() {
+            ctx.fillStyle = BACKGROUND_COLOR;
+            ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+        }
+
+        //Draw the Food.
+        function drawFood() {
+            ctx.fillStyle = colors[current_color];
+            ctx.fillRect(foodx, foody, SNAKE_BLOCK, SNAKE_BLOCK);
+        }
+
+        //Move the Snake by adding a new Body Part to the front of it.
+        function moveSnake() {
+            //Create a new "head" using the position difference.
+            const head = { x: snake[0].x + x1_change, y: snake[0].y + y1_change };
+            //Add "head" to the front of the Snake array.
+            snake.unshift(head);
+            //If the Snake's head overlaps with the Food, increase the Score and place a new Food.
+            if (head.x == foodx && head.y == foody) {
+                score += 1;
+                createFood();
+            }
+
+            //If the Snake has more parts than one plus the Score, remove the last part.
+            if (snake.length > score + 1) {
+                snake.pop();
+            }
+
+            //If the Snake's head has collided with any part of itself, the Game is over.
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) {
+                    game_over = true;
+                }
+            }
+            //If the Snake's head has collided with any of the boundaries, the Game is over.
+            if (head.x < 0 || head.y < 0 || head.x >= gameCanvas.width || head.y >= gameCanvas.height) {
+                game_over = true;
+            }
+        }
+
+        //Place a Food (and move it if it is placed on a Snake body part.)
+        function createFood() {
+            //Set the Food's x- and y-values.
+            foodx = randomSquare(0, gameCanvas.width - SNAKE_BLOCK);
+            foody = randomSquare(0, gameCanvas.height - SNAKE_BLOCK);
+            //Check the Food's position against every part of the Snake.
+            snake.forEach(function isFoodOnSnake(part) {
+                //If the Food overlaps part of the Snake, move it.
+                if (foodx == part.x && foody == part.y) {
+                    createFood();
+                }
+            });
+        }
+
+        //Create a random x- or y-value on the grid on which to place the Food.
+        function randomSquare(min, max) {
+            return Math.round((Math.random() * (max - min) + min) / SNAKE_BLOCK) * SNAKE_BLOCK;
+        }
+
+        //Draw the Snake.
+        function drawSnake() {
+            snake.forEach(drawSnakePart)
+        }
+
+        //Draw the blocks that make up the Snake.
+        function drawSnakePart(snakePart) {
+            ctx.fillStyle = colors[current_color];
+            ctx.fillRect(snakePart.x, snakePart.y, SNAKE_BLOCK, SNAKE_BLOCK);
+        }
+
+        //Draw the Score in the top-left corner.
+        function drawScore() {
+            ctx.font = font_size.toString() + "px Anton";
+            ctx.fillStyle = colors[current_color];
+            ctx.fillText(score.toString(), gameCanvas.width - ctx.measureText(score.toString()).width - 4, font_size);
+        }
+
+        //Draw the prompt to switch to Autoplay Mode at the start of the game.
+        function drawAutoplayPrompt() {
+            ctx.font = font_size.toString() + "px Anton";
+            ctx.fillStyle = colors[current_color];
+            ctx.fillText(autoplay_text, 8, gameCanvas.height - (font_size / 2) + 16);
+        }
+
+        //Draw the prompts and status messages for Autoplay Mode.
+        function drawAutoplayText() {
+            ctx.font = font_size.toString() + "px Anton";
+            ctx.fillStyle = colors[current_color];
+            ctx.fillText(loopandhide_text, 8, gameCanvas.height - (font_size / 2) + 16);
+            //If Autoplay is currently set to loop, draw the indicator for it.
+            if (looping == true) {
+                ctx.fillText(looping_text, gameCanvas.width - ctx.measureText(looping_text).width - 8, gameCanvas.height - (font_size / 2) + 16);
+            }
+        }
+
+        //Determine in which direction the Snake should go next in Autoplay Mode.
+        function chooseDirection() {
+            //First, determine which adjacent spaces are blocked by the Snake's body.
+            var up_blocked = false;
+            var down_blocked = false;
+            var left_blocked = false;
+            var right_blocked = false;
+            //Iterate through the Snake's body and trip any "adjacent-square" flags.
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x == snake[0].x && snake[i].y == snake[0].y - SNAKE_BLOCK) {
+                    up_blocked = true;
+                }
+                else if (snake[i].x == snake[0].x && snake[i].y == snake[0].y + SNAKE_BLOCK) {
+                    down_blocked = true;
+                }
+                else if (snake[i].x == snake[0].x - SNAKE_BLOCK && snake[i].y == snake[0].y) {
+                    left_blocked = true;
+                }
+                else if (snake[i].x == snake[0].x + SNAKE_BLOCK && snake[i].y == snake[0].y) {
+                    right_blocked = true;
+                }
+            }
+            //Also trip any "adjacent-square" flags if the Snake head is against an edge of the play field.
+            if (snake[0].y == 0) {
+                up_blocked = true;
+            }
+            if (snake[0].y == gameCanvas.height - SNAKE_BLOCK) {
+                down_blocked = true;
+            }
+            if (snake[0].x == 0) {
+                left_blocked = true;
+            }
+            if (snake[0].x == gameCanvas.width - SNAKE_BLOCK) {
+                right_blocked = true;
+            }
+            //Second, see if moving into this square will get us closer to the Food.
+            var up_closer = false;
+            var down_closer = false;
+            var left_closer = false;
+            var right_closer = false;
+            //There's no need to "sqrt" the distances - if the squared value is less than, the value itself would be as well.
+            //Check if "Up" will move us closer.
+            if ((snake[0].x - foodx) ** 2 + (((snake[0].y - SNAKE_BLOCK) - foody) ** 2) < ((snake[0].x - foodx) ** 2) + ((snake[0].y - foody) ** 2)) {
+                up_closer = true;
+            }
+            //Check if "Down" will move us closer.
+            if ((snake[0].x - foodx) ** 2 + (((snake[0].y + SNAKE_BLOCK) - foody) ** 2) < ((snake[0].x - foodx) ** 2) + ((snake[0].y - foody) ** 2)) {
+                down_closer = true;
+            }
+            //Check if "Left" will move us closer.
+            if (((snake[0].x - SNAKE_BLOCK) - foodx) ** 2 + (snake[0].y - foody) ** 2 < ((snake[0].x - foodx) ** 2) + ((snake[0].y - foody) ** 2)) {
+                left_closer = true;
+            }
+            //Check if "Right" will move us closer.
+            if (((snake[0].x + SNAKE_BLOCK) - foodx) ** 2 + (snake[0].y - foody) ** 2 < ((snake[0].x - foodx) ** 2) + ((snake[0].y - foody) ** 2)) {
+                right_closer = true;
+            }
+            //Check if "Up" is not blocked and will move us closer.
+            if (!up_blocked && up_closer) {
+                //If the Snake is already moving Up, or hasn't moved at all yet, return "Up".
+                if (y1_change == -SNAKE_BLOCK || (x1_change == 0 && y1_change == 0)) {
+                    return [0, -SNAKE_BLOCK];
+                }
+                //Determine whether or not moving closer to the Food will inadvertantly trap the Snake.
+                else {
+                    for (let i = 1; i <= 7; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            //If a blockage is closer toward "Up", return either "Left", "Right", or "Down".
+                            if ([snake[0].x, snake[0].y - (SNAKE_BLOCK * i)] == x) {
+                                //If already heading Left and Left isn't blocked, go Left.
+                                if (x1_change == -SNAKE_BLOCK && !left_blocked) {
+                                    return [-SNAKE_BLOCK, 0];
+                                }
+                                //If already heading Right and Right isn't blocked, go Right.
+                                else if (x1_change == SNAKE_BLOCK && !right_blocked) {
+                                    return [SNAKE_BLOCK, 0];
+                                }
+                                //Otherwise, if Down isn't blocked, return "Down".
+                                else if (!down_blocked) {
+                                    return [0, SNAKE_BLOCK];
+                                }
+                            }
+                        }
+                    }
+                    //If not, return Up.
+                    return [0, -SNAKE_BLOCK];
+                }
+            }
+            //Check if "Down" is not blocked and will move us closer.
+            if (!down_blocked && down_closer) {
+                //If the Snake is already moving Down, or hasn't moved at all yet, return "Down".
+                if (y1_change == SNAKE_BLOCK || (x1_change == 0 && y1_change == 0)) {
+                    return [0, SNAKE_BLOCK];
+                }
+                //Determine whether or not moving closer to the Food will inadvertantly trap the Snake.
+                else {
+                    for (let i = 1; i <= 7; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            //If a blockage is closer toward "Down", return either "Left", "Right", or "Up".
+                            if ([snake[0].x, snake[0].y + (SNAKE_BLOCK * i)] == snake[x]) {
+                                //If already heading Left and Left isn't blocked, go Left.
+                                if (x1_change == -SNAKE_BLOCK && !left_blocked) {
+                                    return [-SNAKE_BLOCK, 0];
+                                }
+                                //If already heading Right and Right isn't blocked, go Right.
+                                else if (x1_change == SNAKE_BLOCK && !right_blocked) {
+                                    return [SNAKE_BLOCK, 0];
+                                }
+                                //Otherwise, return "Up".
+                                else if (!up_blocked) {
+                                    return [0, -SNAKE_BLOCK];
+                                }
+                            }
+                        }
+                    }
+                    //If not, return Down.
+                    return [0, SNAKE_BLOCK];
+                }
+            }
+            //Check if "Left" is not blocked and will move us closer.
+            if (!left_blocked && left_closer) {
+                //If the Snake is already moving Left, or hasn't moved at all yet, return "Left".
+                if (x1_change == -SNAKE_BLOCK || (x1_change == 0 && y1_change == 0)) {
+                    return [-SNAKE_BLOCK, 0];
+                }
+                //Determine whether or not moving closer to the Food will inadvertantly trap the Snake.
+                else {
+                    for (let i = 1; i <= 7; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            //If a blockage is closer toward "Left", return either "Up", "Down", or "Right".
+                            if ([snake[0].x - (SNAKE_BLOCK * i), snake[0].y] == snake[x]) {
+                                //If already heading Up and Up isn't blocked, go Up.
+                                if (y1_change == -SNAKE_BLOCK && !up_blocked) {
+                                    return [0, -SNAKE_BLOCK];
+                                }
+                                //If already heading Down and Down isn't blocked, go Down.
+                                else if (y1_change == SNAKE_BLOCK && !down_blocked) {
+                                    return [0, SNAKE_BLOCK];
+                                }
+                                //Otherwise, return "Right".
+                                else if (!right_blocked) {
+                                    return [SNAKE_BLOCK, 0];
+                                }
+                            }
+                        }
+                    }
+                    //If not, return Left.
+                    return [-SNAKE_BLOCK, 0];
+                }
+            }
+            //Check if "Right" is not blocked and will move us closer.
+            if (!right_blocked && right_closer) {
+                //If the Snake is already moving Right, or hasn't moved at all yet, return "Right".
+                if (x1_change == SNAKE_BLOCK || (x1_change == 0 && y1_change == 0)) {
+                    return [SNAKE_BLOCK, 0];
+                }
+                //Determine whether or not moving closer to the Food will inadvertantly trap the Snake.
+                else {
+                    for (let i = 1; i <= 7; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            //If a blockage is closer toward "Right", return either "Up", "Down", or "Left".
+                            if ([snake[0].x + (SNAKE_BLOCK * i), snake[0].y] == snake[x]) {
+                                //If already heading Up and Up isn't blocked, go Up.
+                                if (y1_change == -SNAKE_BLOCK && !up_blocked) {
+                                    return [0, -SNAKE_BLOCK];
+                                }
+                                //If already heading Down and Down isn't blocked, go Down.
+                                else if (y1_change == SNAKE_BLOCK && !down_blocked) {
+                                    return [0, SNAKE_BLOCK];
+                                }
+                                //Otherwise, return "Left".
+                                else if (!left_blocked) {
+                                    return [-SNAKE_BLOCK, 0];
+                                }
+                            }
+                        }
+                    }
+                    //If not, return Right.
+                    return [SNAKE_BLOCK, 0];
+                }
+            }
+            //If multiple directions will move us closer(and aren't blocked), choose the first one in the list.
+            //If the Snake is already moving vertically, prioritize the vertical directions.
+            if (y1_change != 0) {
+                if (up_closer && !up_blocked) {
+                    return [0, -SNAKE_BLOCK];
+                }
+                else if (down_closer && !down_blocked) {
+                    return [0, SNAKE_BLOCK];
+                }
+                else if (left_closer && !left_blocked) {
+                    return [-SNAKE_BLOCK, 0];
+                }
+                else if (right_closer && !right_blocked) {
+                    return [SNAKE_BLOCK, 0];
+                }
+                //If *no* direction will move us closer, turn the Snake in a direction that will enable it to move closer next turn.
+                else {
+                    //If the Snake is currently moving Up or Down, determine whether turning Left or Right would be safer.
+                    for (let i = 1; i < gameCanvas.width / SNAKE_BLOCK; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            if ([snake[0].x - (SNAKE_BLOCK * i), snake[0].y] == snake[x]) {
+                                return [SNAKE_BLOCK, 0];
+                            }
+                            if ([snake[0].x + (SNAKE_BLOCK * i), snake[0].y] == snake[x]) {
+                                return [-SNAKE_BLOCK, 0];
+                            }
+                        }
+                    }
+                    return [-SNAKE_BLOCK, 0];
+                }
+            }
+            //If the Snake is moving horizontally, prioritize the horizontal directions.
+            else if (x1_change != 0) {
+                if (left_closer && !left_blocked) {
+                    return [-SNAKE_BLOCK, 0];
+                }
+                else if (right_closer && !right_blocked) {
+                    return [SNAKE_BLOCK, 0];
+                }
+                else if (up_closer && !up_blocked) {
+                    return [0, -SNAKE_BLOCK];
+                }
+                else if (down_closer && !down_blocked) {
+                    return [0, SNAKE_BLOCK];
+                }
+                //If *no* direction will move us closer, turn the Snake in a direction that will enable it to move closer next turn.
+                else {
+                    //If the Snake is currently moving Left or Right, determine whether turning Up or Down would be safer.
+                    for (let i = 1; i < gameCanvas.height / SNAKE_BLOCK; i++) {
+                        for (let x = 1; x < snake.length; x++) {
+                            if ([snake[0].x, snake[0].y - (SNAKE_BLOCK * i)] == snake[x]) {
+                                return [0, SNAKE_BLOCK];
+                            }
+                            if ([snake[0].x, snake[0].y + (SNAKE_BLOCK * i)] == snake[x]) {
+                                return [0, -SNAKE_BLOCK];
+                            }
+                        }
+                    }
+                    return [0, -SNAKE_BLOCK];
+                }
+            }
+            //If the Snake cannot move in any direction, simply have it move forward and get a Game Over.
+            else if (up_blocked && down_blocked && left_blocked && right_blocked) {
+                return [x1_change, y1_change];
+            }
+        }
+
+        //Change the Snake's direction using the WASD/Arrow Keys by updating "x1_change" and "y1_change".
+        function changeDirection(event) {
+            //Set up the WASD/Arrow key checks.
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const W_KEY = 87;
+            const S_KEY = 83;
+            const A_KEY = 65;
+            const D_KEY = 68;
+            const keyPressed = event.keyCode;
+            //Check each of the WASD/Arrow keys (Manual Mode only).
+            if (autoplay == false) {
+                //Up:
+                if (keyPressed === UP_KEY || keyPressed === W_KEY) {
+                    //Only move Up if the Snake isn't currently moving Down.
+                    if (y1_change != SNAKE_BLOCK) {
+                        x1_change = 0;
+                        y1_change = -SNAKE_BLOCK;
+                    }
+                }
+                //Down:
+                else if (keyPressed === DOWN_KEY || keyPressed === S_KEY) {
+                    //Only move Down if the Snake isn't currently moving Up.
+                    if (y1_change != -SNAKE_BLOCK) {
+                        x1_change = 0;
+                        y1_change = SNAKE_BLOCK;
+                    }
+                }
+                //Left:
+                else if (keyPressed === LEFT_KEY || keyPressed === A_KEY) {
+                    //Only move Left if the Snake isn't currently moving Right.
+                    if (x1_change != SNAKE_BLOCK) {
+                        x1_change = -SNAKE_BLOCK;
+                        y1_change = 0;
+                    }
+                }
+                //Right:
+                else if (keyPressed === RIGHT_KEY || keyPressed === D_KEY) {
+                    //Only move Right if the Snake isn't currently moving Left.
+                    if (x1_change != -SNAKE_BLOCK) {
+                        x1_change = SNAKE_BLOCK;
+                        y1_change = 0;
+                    }
+                }
+            }
+        }
+
+        //Change the display colur using the Number keys.
+        function changeColors(event) {
+            const keyPressed = event.keyCode;
+            //Color 0: White
+            if (keyPressed === 48 || keyPressed === 96) {
+                current_color = 0;
+            }
+            //Color 1: Red
+            else if (keyPressed === 49 || keyPressed === 97) {
+                current_color = 1;
+            }
+            //Color 2: Orange
+            else if (keyPressed === 50 || keyPressed === 98) {
+                current_color = 2;
+            }
+            //Color 3: Yellow
+            else if (keyPressed === 51 || keyPressed === 99) {
+                current_color = 3;
+            }
+            //Color 4: Lawn Green
+            else if (keyPressed === 52 || keyPressed === 100) {
+                current_color = 4;
+            }
+            //Color 5: Green
+            else if (keyPressed === 53 || keyPressed === 101) {
+                current_color = 5;
+            }
+            //Color 6: Deep Sky Blue
+            else if (keyPressed === 54 || keyPressed === 102) {
+                current_color = 6;
+            }
+            //Color 7: Blue
+            else if (keyPressed === 55 || keyPressed === 103) {
+                current_color = 7;
+            }
+            //Color 8: Rebecca Purple
+            else if (keyPressed === 56 || keyPressed === 104) {
+                current_color = 8;
+            }
+            //Color 9: Gray
+            else if (keyPressed === 57 || keyPressed === 105) {
+                current_color = 9;
+            }
+        }
+
+        //Switch between Manual and Autoplay Mode, enable Looping in Autoplay Mode, and hide the Loop prompt.
+        function changeGameMode(event) {
+            const P_KEY = 80;
+            const R_KEY = 82;
+            const L_KEY = 76;
+            const H_KEY = 72;
+            const keyPressed = event.keyCode;
+            //P Key: Enable/Disable Autoplay
+            if (keyPressed === P_KEY) {
+                //If the Game is over and Manual Mode is enabled, switch to Autoplay Mode.
+                if (game_over == true && autoplay == false) {
+                    resetGame();
+                    game_over = false;
+                    autoplay = true;
+                }
+                //If the Game is over and Autoplay Mode is enabled, switch to Manual Mode.
+                else if (game_over == true && autoplay == true) {
+                    resetGame();
+                    game_over = false;
+                    autoplay = false;
+                }
+                //If the Game is in Manual Mode but the Snake hasn't been moved yet, allow a switch to Autoplay Mode before the Game starts.
+                else if (game_over == false && autoplay == false && x1_change == 0 && y1_change == 0) {
+                    autoplay = true;
+                    gameLoopAuto();
+                }
+            }
+            //R Key: Reset the Game
+            else if (keyPressed === R_KEY) {
+                //If the Game is over and Manual Mode is enabled, restart Manual Mode.
+                if (game_over == true && autoplay == false) {
+                    resetGame();
+                    game_over = false;
+                }
+                //If the Game is over and Autoplay Mode is enabled, restart Autoplay Mode.
+                else if (game_over == true && autoplay == true) {
+                    resetGame();
+                    game_over = false;
+                }
+            }
+            //L Key: Enable/Disable Looping in Autoplay Mode
+            else if (keyPressed === L_KEY) {
+                //If the Game isn't over and Autoplay Mode is enabled, toggle Looping.
+                if (game_over == false && autoplay == true) {
+                    looping = !looping;
+                }
+            }
+            //H Key: Show/Hide the "Loop" prompt in Autoplay Mode.
+            else if (keyPressed === H_KEY) {
+                //If the Game isn't over and Autoplay Mode is enabled, toggle Displaying the "Loop" prompt.
+                if (game_over == false && autoplay == true) {
+                    displayLoopText = !displayLoopText;
+                }
+            }
+        }
+
+        //Reset the Game State when the Game is restarted.
+        function resetGame() {
+            //Reset the Snake.
+            snake = [
+                { x: gameCanvas.width / 2, y: gameCanvas.height / 2 }
+            ]
+            //Reset the "direction" values.
+            x1_change = 0;
+            y1_change = 0;
+            change_vals = [0, 0];
+            //Reset the Food.
+            createFood();
+            //Reset the Score.
+            score = 0;
+        }
+    </script>
+</html>
