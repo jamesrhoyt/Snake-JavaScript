@@ -1,0 +1,3 @@
+C:\Projects\Snake_Javascript\Snake\Snake\obj\Debug\Snake.njsproj.AssemblyReference.cache
+C:\Projects\Snake_Javascript\Snake\Snake\obj\Debug\Snake.njsproj.CoreCompileInputs.cache
+C:\Projects\Snake_Javascript\Snake\Snake\bin\Microsoft.NodejsTools.WebRole.dll
